@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jim's Great Anagram Helper</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f4f4f9;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 1.2rem;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      font-size: 2.4rem;
+    }
+    .container {
+      background: white;
+      padding: 2.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      width: fit-content;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.6rem;
+      font-size: 1.3rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .letter-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      justify-content: flex-start;
+      margin: 1.2rem 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 1rem;
+    }
+    .letter-boxes {
+      display: flex;
+      gap: 0.6rem;
+      white-space: nowrap;
+    }
+    .letter-box {
+      width: 60px;
+      height: 60px;
+      text-align: center;
+      font-size: 1.8rem;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      cursor: move;
+      background: white;
+      flex-shrink: 0;
+      font-style: normal;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .letter-box.fixed {
+      background: #cce5ff;
+      border-color: #007bff;
+      font-weight: bold;
+      cursor: default;
+    }
+    .layout-box {
+      margin-top: 2rem;
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #555;
+      background: #eef2f7;
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1.2rem;
+      margin-top: 1.2rem;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 0.8rem 1.8rem;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .start-btn { background: #4CAF50; color: white; }
+    .start-btn:hover { background: #45a049; }
+    .randomize-btn { background: #2196F3; color: white; }
+    .randomize-btn:hover { background: #1e87dc; }
+    .reset-btn { background: #f44336; color: white; }
+    .reset-btn:hover { background: #e03127; }
+    .error-message {
+      color: red;
+      font-weight: bold;
+      margin-top: 0.6rem;
+      display: none;
+    }
+    @media (max-width: 1024px) {
+      html {
+        font-size: 110%;
+      }
+      .container {
+        width: 90%;
+        padding: 2rem;
+      }
+      .letter-box {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+      }
+      .buttons {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Jim's Great Anagram Helper</h1>
+  <div class="container">
+    <div class="form-group">
+      <label for="scrambled">Scrambled Letters</label>
+      <input type="text" id="scrambled" oninput="autoSetLength()" maxlength="30" />
+    </div>
+    <div class="form-group">
+      <label for="length">Word Length (auto-filled from spaces)</label>
+      <input type="text" id="length" readonly />
+    </div>
+    <div class="error-message" id="errorMessage"></div>
+    <div class="buttons">
+      <button class="start-btn" id="startButton" onclick="startGame()">Start</button>
+      <button class="randomize-btn" onclick="randomize()">Randomize</button>
+      <button class="reset-btn" onclick="resetAll()">Reset</button>
+    </div>
+    <div class="letter-lines" id="letterLines"></div>
+    <div class="layout-box" id="layoutText"></div>
+  </div>
+
+  <script>
+    let lockedIndices = new Set();
+    let started = false;
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        if (!started) {
+          startGame();
+        } else {
+          randomize();
+        }
+      }
+    });
+
+    function autoSetLength() {
+      const scrambledInput = document.getElementById('scrambled');
+      const lengthInput = document.getElementById('length');
+      const raw = scrambledInput.value.trim();
+      const parts = raw.split(/\s+/);
+      const total = parts.join('').length;
+      if (total > 15) {
+        document.getElementById('errorMessage').textContent = 'Total letters cannot exceed 15!';
+        document.getElementById('errorMessage').style.display = 'block';
+        return;
+      } else {
+        document.getElementById('errorMessage').style.display = 'none';
+      }
+      const layout = parts.map(p => p.length).join('-');
+      lengthInput.value = layout;
+    }
+
+    function updateLayoutText() {
+      const lines = document.querySelectorAll('.letter-boxes');
+      const layoutText = Array.from(lines).map(line => {
+        return Array.from(line.children).map(box => box.textContent).join('');
+      }).join(' ');
+      document.getElementById('layoutText').textContent = layoutText;
+    }
+
+    function startGame() {
+      const rawInput = document.getElementById('scrambled').value.trim();
+      const scrambled = rawInput.replace(/\s+/g, '').toUpperCase();
+      const lengthInput = document.getElementById('length').value;
+      const display = document.getElementById('letterLines');
+      const error = document.getElementById('errorMessage');
+      const startButton = document.getElementById('startButton');
+      display.innerHTML = '';
+      lockedIndices.clear();
+
+      if (!scrambled || !lengthInput) {
+        error.textContent = 'Please enter scrambled letters.';
+        error.style.display = 'block';
+        return;
+      }
+
+      let layoutParts = lengthInput.split('-').map(Number);
+      let totalBoxes = layoutParts.reduce((a, b) => a + b, 0);
+
+      if (scrambled.length > 15 || totalBoxes > 15) {
+        error.textContent = 'Max limit of 15 letters exceeded!';
+        error.style.display = 'block';
+        return;
+      }
+      if (totalBoxes !== scrambled.length) {
+        error.textContent = 'Layout must match number of scrambled letters.';
+        error.style.display = 'block';
+        return;
+      }
+      error.style.display = 'none';
+
+      let currentIndex = 0;
+      layoutParts.forEach(part => {
+        const row = document.createElement('div');
+        row.className = 'letter-boxes';
+        for (let i = 0; i < part; i++) {
+          const box = document.createElement('div');
+          box.className = 'letter-box';
+          box.textContent = scrambled[currentIndex];
+          box.dataset.index = currentIndex;
+          box.draggable = true;
+
+          let tapCount = 0;
+          let tapTimeout;
+
+          box.addEventListener('touchstart', e => {
+            tapCount++;
+            if (tapCount === 1) {
+              tapTimeout = setTimeout(() => {
+                tapCount = 0;
+              }, 300);
+            } else if (tapCount === 2) {
+              clearTimeout(tapTimeout);
+              tapCount = 0;
+              toggleLock(box);
+            }
+          });
+
+          box.addEventListener('dragstart', e => {
+            if (lockedIndices.has(parseInt(box.dataset.index))) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.setData('text/plain', box.dataset.index);
+          });
+
+          box.addEventListener('dragover', e => {
+            e.preventDefault();
+          });
+
+          box.addEventListener('drop', e => {
+            e.preventDefault();
+            const sourceIdx = e.dataTransfer.getData('text/plain');
+            const targetIdx = box.dataset.index;
+            if (sourceIdx !== targetIdx && !lockedIndices.has(parseInt(targetIdx))) {
+              const sourceBox = document.querySelector(`[data-index='${sourceIdx}']`);
+              const temp = sourceBox.textContent;
+              sourceBox.textContent = box.textContent;
+              box.textContent = temp;
+              lockedIndices.add(parseInt(targetIdx));
+              box.classList.add('fixed');
+              updateLayoutText();
+            }
+          });
+
+          box.onclick = () => {
+            // Normal click fallback for desktop
+            toggleLock(box);
+          };
+
+          function toggleLock(box) {
+            const idx = parseInt(box.dataset.index);
+            if (lockedIndices.has(idx)) {
+              lockedIndices.delete(idx);
+              box.classList.remove('fixed');
+            } else {
+              lockedIndices.add(idx);
+              box.classList.add('fixed');
+            }
+            updateLayoutText();
+          }
+
+          row.appendChild(box);
+          currentIndex++;
+        }
+        display.appendChild(row);
+      });
+
+      updateLayoutText();
+      started = true;
+      startButton.style.display = 'none';
+    }
+
+    function randomize() {
+      const boxes = Array.from(document.querySelectorAll('.letter-box'));
+      let unlocked = [];
+      let unlockedIndices = [];
+
+      boxes.forEach((box, idx) => {
+        const index = parseInt(box.dataset.index);
+        if (!lockedIndices.has(index)) {
+          unlocked.push(box.textContent);
+          unlockedIndices.push(box);
+        }
+      });
+
+      for (let i = unlocked.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [unlocked[i], unlocked[j]] = [unlocked[j], unlocked[i]];
+      }
+
+      unlockedIndices.forEach((box, i) => {
+        box.textContent = unlocked[i];
+      });
+
+      updateLayoutText();
+    }
+
+    function resetAll() {
+      document.getElementById('scrambled').value = '';
+      document.getElementById('length').value = '';
+      document.getElementById('letterLines').innerHTML = '';
+      document.getElementById('layoutText').textContent = '';
+      document.getElementById('errorMessage').style.display = 'none';
+      document.getElementById('startButton').style.display = 'inline-block';
+      lockedIndices.clear();
+      started = false;
+    }
+  </script>
+</body>
+</html>
